@@ -1,0 +1,130 @@
+---
+- name: Install Nexus Repo on Nexus VM
+  hosts: nexus
+  become: true
+  tasks:
+    - name: Install Java (required for Nexus)
+      apt:
+        name: openjdk-11-jdk
+        state: present
+        update_cache: yes
+
+    - name: Add Nexus user
+      user:
+        name: nexus
+        shell: /bin/bash
+        create_home: yes
+
+    - name: Download Nexus Repository
+      get_url:
+        url: https://download.sonatype.com/nexus/3/latest-unix.tar.gz
+        dest: /tmp/nexus.tar.gz
+
+    - name: Extract Nexus
+      unarchive:
+        src: /tmp/nexus.tar.gz
+        dest: /opt/
+        remote_src: yes
+        owner: nexus
+        group: nexus
+
+    - name: Set permissions for Nexus directories
+      file:
+        path: /opt/nexus-*
+        state: directory
+        owner: nexus
+        group: nexus
+        recurse: yes
+
+    - name: Create Nexus systemd service file
+      copy:
+        dest: /etc/systemd/system/nexus.service
+        content: |
+          [Unit]
+          Description=Nexus Service
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=nexus
+          ExecStart=/opt/nexus-*/bin/nexus start
+          ExecStop=/opt/nexus-*/bin/nexus stop
+          Restart=on-abort
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Enable and start Nexus service
+      systemd:
+        name: nexus
+        enabled: true
+        state: started
+
+- name: Install SonarQube on SonarQube VM
+  hosts: sonarqube
+  become: true
+  tasks:
+    - name: Install Java (required for SonarQube)
+      apt:
+        name: openjdk-11-jdk
+        state: present
+        update_cache: yes
+
+    - name: Add SonarQube user
+      user:
+        name: sonarqube
+        shell: /bin/bash
+        create_home: yes
+
+    - name: Download SonarQube
+      get_url:
+        url: https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-9.6.1.59531.zip
+        dest: /tmp/sonarqube.zip
+
+    - name: Install unzip
+      apt:
+        name: unzip
+        state: present
+
+    - name: Extract SonarQube
+      unarchive:
+        src: /tmp/sonarqube.zip
+        dest: /opt/
+        remote_src: yes
+        owner: sonarqube
+        group: sonarqube
+
+    - name: Set permissions for SonarQube directories
+      file:
+        path: /opt/sonarqube-*
+        state: directory
+        owner: sonarqube
+        group: sonarqube
+        recurse: yes
+
+    - name: Create SonarQube systemd service file
+      copy:
+        dest: /etc/systemd/system/sonarqube.service
+        content: |
+          [Unit]
+          Description=SonarQube service
+          After=syslog.target network.target
+
+          [Service]
+          Type=simple
+          ExecStart=/opt/sonarqube-*/bin/linux-x86-64/sonar.sh start
+          ExecStop=/opt/sonarqube-*/bin/linux-x86-64/sonar.sh stop
+          User=sonarqube
+          Group=sonarqube
+          Restart=on-failure
+          LimitNOFILE=65536
+          LimitNPROC=4096
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Enable and start SonarQube service
+      systemd:
+        name: sonarqube
+        enabled: true
+        state: started
