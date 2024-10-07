@@ -4,20 +4,20 @@ provider "azurerm" {
   resource_provider_registrations = "none"
 }
 
-resource "azurerm_resource_group" "aks_rg" {
-  name     = "aksResourceGroup"
+resource "azurerm_resource_group" "example" {
+  name     = "Ewis"
   location = "East US"
 }
 
-resource "azurerm_kubernetes_cluster" "aks_cluster" {
-  name                = "production-aks-cluster"
-  location            = azurerm_resource_group.aks_rg.location
-  resource_group_name = azurerm_resource_group.aks_rg.name
-  dns_prefix          = "prodaks"
+resource "azurerm_kubernetes_cluster" "example" {
+  name                = "example-k8s-cluster"
+  location            = azurerm_resource_group.example.location
+  resource_group_name = azurerm_resource_group.example.name
+  dns_prefix          = "examplek8s"
 
   default_node_pool {
-    name       = "systempool"
-    node_count = 3
+    name       = "default"
+    node_count = 1
     vm_size    = "Standard_DS2_v2"
   }
 
@@ -27,35 +27,36 @@ resource "azurerm_kubernetes_cluster" "aks_cluster" {
 
   network_profile {
     network_plugin     = "azure"
-    load_balancer_sku  = "standard"   # Must be lowercase
+    load_balancer_sku  = "standard"   # Changed to lowercase
   }
 
-  oidc_issuer_enabled = true
+  oidc_issuer_enabled             = true
 }
 
-data "azurerm_client_config" "current" {}
+data "azurerm_client_config" "example" {}
 
 provider "kubernetes" {
-  host                   = azurerm_kubernetes_cluster.aks_cluster.kube_admin_config[0].host
-  token                  = azurerm_kubernetes_cluster.aks_cluster.kube_admin_config[0].password
-  cluster_ca_certificate = base64decode(azurerm_kubernetes_cluster.aks_cluster.kube_admin_config[0].cluster_ca_certificate)
+  host                   = azurerm_kubernetes_cluster.example.kube_admin_config[0].host
+  token                  = azurerm_kubernetes_cluster.example.kube_admin_config[0].password
+  cluster_ca_certificate = base64decode(azurerm_kubernetes_cluster.example.kube_admin_config[0].cluster_ca_certificate)
 }
 
-resource "kubernetes_namespace" "production" {
+
+resource "kubernetes_namespace" "prod" {
   metadata {
-    name = "production"
+    name = "prod"
   }
 }
 
-resource "kubernetes_namespace" "development" {
+resource "kubernetes_namespace" "dev" {
   metadata {
-    name = "development"
+    name = "dev"
   }
 }
 
-resource "kubernetes_namespace" "testing" {
+resource "kubernetes_namespace" "test" {
   metadata {
-    name = "testing"
+    name = "test"
   }
 }
 
@@ -65,7 +66,7 @@ resource "kubernetes_persistent_volume" "postgres_pv" {
   }
   spec {
     capacity = {
-      storage = "5Gi"
+      "storage" = "5Gi"
     }
     access_modes = ["ReadWriteOnce"]
     persistent_volume_source {
@@ -79,7 +80,7 @@ resource "kubernetes_persistent_volume" "postgres_pv" {
 resource "kubernetes_persistent_volume_claim" "postgres_pvc_prod" {
   metadata {
     name      = "postgres-pvc-prod"
-    namespace = kubernetes_namespace.production.metadata[0].name
+    namespace = kubernetes_namespace.prod.metadata[0].name
   }
   spec {
     access_modes = ["ReadWriteOnce"]
@@ -94,7 +95,7 @@ resource "kubernetes_persistent_volume_claim" "postgres_pvc_prod" {
 resource "kubernetes_persistent_volume_claim" "postgres_pvc_dev" {
   metadata {
     name      = "postgres-pvc-dev"
-    namespace = kubernetes_namespace.development.metadata[0].name
+    namespace = kubernetes_namespace.dev.metadata[0].name
   }
   spec {
     access_modes = ["ReadWriteOnce"]
@@ -109,7 +110,7 @@ resource "kubernetes_persistent_volume_claim" "postgres_pvc_dev" {
 resource "kubernetes_persistent_volume_claim" "postgres_pvc_test" {
   metadata {
     name      = "postgres-pvc-test"
-    namespace = kubernetes_namespace.testing.metadata[0].name
+    namespace = kubernetes_namespace.test.metadata[0].name
   }
   spec {
     access_modes = ["ReadWriteOnce"]
@@ -121,10 +122,11 @@ resource "kubernetes_persistent_volume_claim" "postgres_pvc_test" {
   }
 }
 
+
 resource "kubernetes_deployment" "postgres_prod" {
   metadata {
     name      = "postgres"
-    namespace = kubernetes_namespace.production.metadata[0].name
+    namespace = kubernetes_namespace.prod.metadata[0].name  # Use [0] for indexing
   }
   spec {
     replicas = 1
@@ -148,15 +150,15 @@ resource "kubernetes_deployment" "postgres_prod" {
           }
           env {
             name  = "POSTGRES_DB"
-            value = "prod_db"
+            value = "mydb"
           }
           env {
             name  = "POSTGRES_USER"
-            value = "prod_user"
+            value = "user"
           }
           env {
             name  = "POSTGRES_PASSWORD"
-            value = "prod_password"
+            value = "password"
           }
           volume_mount {
             name       = "postgres-storage"
@@ -166,7 +168,7 @@ resource "kubernetes_deployment" "postgres_prod" {
         volume {
           name = "postgres-storage"
           persistent_volume_claim {
-            claim_name = kubernetes_persistent_volume_claim.postgres_pvc_prod.metadata[0].name
+            claim_name = kubernetes_persistent_volume_claim.postgres_pvc_prod.metadata[0].name  # Use [0] for indexing
           }
         }
       }
@@ -177,7 +179,7 @@ resource "kubernetes_deployment" "postgres_prod" {
 resource "kubernetes_deployment" "postgres_dev" {
   metadata {
     name      = "postgres"
-    namespace = kubernetes_namespace.development.metadata[0].name
+    namespace = kubernetes_namespace.dev.metadata[0].name  # Use [0] for indexing
   }
   spec {
     replicas = 1
@@ -201,15 +203,15 @@ resource "kubernetes_deployment" "postgres_dev" {
           }
           env {
             name  = "POSTGRES_DB"
-            value = "dev_db"
+            value = "mydb"
           }
           env {
             name  = "POSTGRES_USER"
-            value = "dev_user"
+            value = "user"
           }
           env {
             name  = "POSTGRES_PASSWORD"
-            value = "dev_password"
+            value = "password"
           }
           volume_mount {
             name       = "postgres-storage"
@@ -219,7 +221,7 @@ resource "kubernetes_deployment" "postgres_dev" {
         volume {
           name = "postgres-storage"
           persistent_volume_claim {
-            claim_name = kubernetes_persistent_volume_claim.postgres_pvc_dev.metadata[0].name
+            claim_name = kubernetes_persistent_volume_claim.postgres_pvc_dev.metadata[0].name  # Use [0] for indexing
           }
         }
       }
@@ -230,7 +232,7 @@ resource "kubernetes_deployment" "postgres_dev" {
 resource "kubernetes_deployment" "postgres_test" {
   metadata {
     name      = "postgres"
-    namespace = kubernetes_namespace.testing.metadata[0].name
+    namespace = kubernetes_namespace.test.metadata[0].name  # Use [0] for indexing
   }
   spec {
     replicas = 1
@@ -254,15 +256,15 @@ resource "kubernetes_deployment" "postgres_test" {
           }
           env {
             name  = "POSTGRES_DB"
-            value = "test_db"
+            value = "mydb"
           }
           env {
             name  = "POSTGRES_USER"
-            value = "test_user"
+            value = "user"
           }
           env {
             name  = "POSTGRES_PASSWORD"
-            value = "test_password"
+            value = "password"
           }
           volume_mount {
             name       = "postgres-storage"
@@ -272,7 +274,7 @@ resource "kubernetes_deployment" "postgres_test" {
         volume {
           name = "postgres-storage"
           persistent_volume_claim {
-            claim_name = kubernetes_persistent_volume_claim.postgres_pvc_test.metadata[0].name
+            claim_name = kubernetes_persistent_volume_claim.postgres_pvc_test.metadata[0].name  # Use [0] for indexing
           }
         }
       }
@@ -283,7 +285,7 @@ resource "kubernetes_deployment" "postgres_test" {
 resource "kubernetes_service" "postgres_prod" {
   metadata {
     name      = "postgres"
-    namespace = kubernetes_namespace.production.metadata[0].name
+    namespace = kubernetes_namespace.prod.metadata[0].name  # Use [0] for indexing
   }
   spec {
     selector = {
@@ -300,7 +302,7 @@ resource "kubernetes_service" "postgres_prod" {
 resource "kubernetes_service" "postgres_dev" {
   metadata {
     name      = "postgres"
-    namespace = kubernetes_namespace.development.metadata[0].name
+    namespace = kubernetes_namespace.dev.metadata[0].name  # Use [0] for indexing
   }
   spec {
     selector = {
@@ -317,7 +319,7 @@ resource "kubernetes_service" "postgres_dev" {
 resource "kubernetes_service" "postgres_test" {
   metadata {
     name      = "postgres"
-    namespace = kubernetes_namespace.testing.metadata[0].name
+    namespace = kubernetes_namespace.test.metadata[0].name  # Use [0] for indexing
   }
   spec {
     selector = {
@@ -331,14 +333,14 @@ resource "kubernetes_service" "postgres_test" {
   }
 }
 
-resource "kubernetes_ingress" "app_prod_ingress" {
+resource "kubernetes_ingress" "app_prod" {
   metadata {
     name      = "app-prod-ingress"
-    namespace = kubernetes_namespace.production.metadata[0].name
+    namespace = kubernetes_namespace.prod.metadata[0].name
   }
   spec {
     rule {
-      host = "prod.example.com"
+      host = "app.example.com"
       http {
         path {
           path = "/"
@@ -352,14 +354,14 @@ resource "kubernetes_ingress" "app_prod_ingress" {
   }
 }
 
-resource "kubernetes_ingress" "app_dev_ingress" {
+resource "kubernetes_ingress" "app_dev" {
   metadata {
     name      = "app-dev-ingress"
-    namespace = kubernetes_namespace.development.metadata[0].name
+    namespace = kubernetes_namespace.dev.metadata[0].name
   }
   spec {
     rule {
-      host = "dev.example.com"
+      host = "app.example.com"
       http {
         path {
           path = "/"
@@ -373,14 +375,14 @@ resource "kubernetes_ingress" "app_dev_ingress" {
   }
 }
 
-resource "kubernetes_ingress" "app_test_ingress" {
+resource "kubernetes_ingress" "app_test" {
   metadata {
     name      = "app-test-ingress"
-    namespace = kubernetes_namespace.testing.metadata[0].name
+    namespace = kubernetes_namespace.test.metadata[0].name
   }
   spec {
     rule {
-      host = "test.example.com"
+      host = "app.example.com"
       http {
         path {
           path = "/"
@@ -393,3 +395,4 @@ resource "kubernetes_ingress" "app_test_ingress" {
     }
   }
 }
+
