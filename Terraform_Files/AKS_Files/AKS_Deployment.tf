@@ -1,18 +1,31 @@
+terraform {
+  required_providers {
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = ">= 2.0"
+    }
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = ">= 4.3.0"
+    }
+  }
+}
+
 provider "azurerm" {
   features {}
   subscription_id = "b1ec803b-00c3-42bb-83ca-d12723a0e6a3"
   resource_provider_registrations = "none"
 }
 
-resource "azurerm_resource_group" "aks_rg" {
-  name     = "aksResourceGroup"
-  location = "East US"
+# Reference the existing resource group "Ewis"
+data "azurerm_resource_group" "aks_rg" {
+  name = "Ewis"
 }
 
 resource "azurerm_kubernetes_cluster" "aks_cluster" {
   name                = "production-aks-cluster"
-  location            = azurerm_resource_group.aks_rg.location
-  resource_group_name = azurerm_resource_group.aks_rg.name
+  location            = data.azurerm_resource_group.aks_rg.location
+  resource_group_name = data.azurerm_resource_group.aks_rg.name
   dns_prefix          = "prodaks"
 
   default_node_pool {
@@ -36,10 +49,12 @@ resource "azurerm_kubernetes_cluster" "aks_cluster" {
 data "azurerm_client_config" "current" {}
 
 provider "kubernetes" {
-  host                   = azurerm_kubernetes_cluster.aks_cluster.kube_admin_config[0].host
-  token                  = azurerm_kubernetes_cluster.aks_cluster.kube_admin_config[0].password
-  cluster_ca_certificate = base64decode(azurerm_kubernetes_cluster.aks_cluster.kube_admin_config[0].cluster_ca_certificate)
+  host                   = azurerm_kubernetes_cluster.aks_cluster.kube_config[0].host
+  client_certificate     = base64decode(azurerm_kubernetes_cluster.aks_cluster.kube_config[0].client_certificate)
+  client_key             = base64decode(azurerm_kubernetes_cluster.aks_cluster.kube_config[0].client_key)
+  cluster_ca_certificate = base64decode(azurerm_kubernetes_cluster.aks_cluster.kube_config[0].cluster_ca_certificate)
 }
+
 
 resource "kubernetes_namespace" "production" {
   metadata {
@@ -331,65 +346,71 @@ resource "kubernetes_service" "postgres_test" {
   }
 }
 
-resource "kubernetes_ingress" "app_prod_ingress" {
+# Production Service
+resource "kubernetes_service" "app_prod_service" {
   metadata {
-    name      = "app-prod-ingress"
-    namespace = kubernetes_namespace.production.metadata[0].name
+    name      = "app-prod-service"
+    namespace = "production"
   }
+
   spec {
-    rule {
-      host = "prod.example.com"
-      http {
-        path {
-          path = "/"
-          backend {
-            service_name = kubernetes_service.postgres_prod.metadata[0].name
-            service_port = 5432
-          }
-        }
-      }
+    selector = {
+      app = "app-prod"
     }
+
+    port {
+      port        = 80
+      target_port = 8080
+    }
+
+    type = "ClusterIP"
   }
 }
 
-resource "kubernetes_ingress" "app_dev_ingress" {
+# Development Service
+resource "kubernetes_service" "app_dev_service" {
   metadata {
-    name      = "app-dev-ingress"
-    namespace = kubernetes_namespace.development.metadata[0].name
+    name      = "app-dev-service"
+    namespace = "development"
   }
+
   spec {
-    rule {
-      host = "dev.example.com"
-      http {
-        path {
-          path = "/"
-          backend {
-            service_name = kubernetes_service.postgres_dev.metadata[0].name
-            service_port = 5432
-          }
-        }
-      }
+    selector = {
+      app = "app-dev"
     }
+
+    port {
+      port        = 80
+      target_port = 8080
+    }
+
+    type = "ClusterIP"
   }
 }
 
-resource "kubernetes_ingress" "app_test_ingress" {
+# Testing Service
+resource "kubernetes_service" "app_test_service" {
   metadata {
-    name      = "app-test-ingress"
-    namespace = kubernetes_namespace.testing.metadata[0].name
+    name      = "app-test-service"
+    namespace = "testing"
   }
+
   spec {
-    rule {
-      host = "test.example.com"
-      http {
-        path {
-          path = "/"
-          backend {
-            service_name = kubernetes_service.postgres_test.metadata[0].name
-            service_port = 5432
-          }
-        }
-      }
+    selector = {
+      app = "app-test"
     }
+
+    port {
+      port        = 80
+      target_port = 8080
+    }
+
+    type = "ClusterIP"
   }
+}
+
+
+output "kube_config" {
+  value = azurerm_kubernetes_cluster.aks_cluster.kube_config
+  sensitive = true
 }
