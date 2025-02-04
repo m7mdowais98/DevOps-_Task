@@ -20,7 +20,7 @@ data "azurerm_resource_group" "rg" {
 
 # Define the public key once (you will use the same path)
 locals {
-  ssh_public_key = file("C:/Users/a895524/.ssh/id_rsa.pub")  # Adjust the path as needed
+  ssh_public_key = file("C:\Users\MohamedIbrahimHasan\Downloads\SSH_Key.pem")  # Adjust the path as needed
 }
 
 # Virtual network for the VMs
